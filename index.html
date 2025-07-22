@@ -1,106 +1,13 @@
-<!DOCTYPE html>
-<html lang="en">
-<head>
-  <meta charset="utf-8">
-  <meta name="viewport" content="width=device-width,initial-scale=1">
-  <title>Territory Coverage Map</title>
-  <!-- Leaflet CSS -->
-  <link
-    rel="stylesheet"
-    href="https://cdn.jsdelivr.net/npm/leaflet@1.9.4/dist/leaflet.css"
-  />
-  <style>
-    html, body { margin:0; padding:0; height:100%; }
-    #map { width:100%; height:100%; }
-    .info {
-      position:absolute; top:10px; right:10px;
-      background:rgba(0,0,0,0.75); color:#fff;
-      padding:10px; border-radius:6px; font:14px sans-serif;
-      z-index:1000; min-width:200px;
-    }
-    .info h4 { margin:0 0 8px; }
-    .info a { color:#0af; text-decoration:underline; }
-  </style>
-</head>
-<body>
-  <div id="map"></div>
-
-  <!-- Leaflet JS -->
-  <script src="https://cdn.jsdelivr.net/npm/leaflet@1.9.4/dist/leaflet.js"></script>
-  <script>
-    // 1) Point this at your Apps Script deployment:
-    const API = 'https://script.google.com/macros/s/AKfycbzB3_7QgYPyD8_9L2wBVswCTKthBYJkhfhB_cOJLaXB7byKzs2xStgHACt0g6wlLxc1JA/exec';
-
-    // 2) FIPS-to-State lookup
-    const stateNames = {
-      '01':'Alabama','02':'Alaska','04':'Arizona','05':'Arkansas','06':'California',
-      '08':'Colorado','09':'Connecticut','10':'Delaware','11':'District of Columbia','12':'Florida',
-      '13':'Georgia','15':'Hawaii','16':'Idaho','17':'Illinois','18':'Indiana','19':'Iowa',
-      '20':'Kansas','21':'Kentucky','22':'Louisiana','23':'Maine','24':'Maryland','25':'Massachusetts',
-      '26':'Michigan','27':'Minnesota','28':'Mississippi','29':'Missouri','30':'Montana','31':'Nebraska',
-      '32':'Nevada','33':'New Hampshire','34':'New Jersey','35':'New Mexico','36':'New York','37':'North Carolina',
-      '38':'North Dakota','39':'Ohio','40':'Oklahoma','41':'Oregon','42':'Pennsylvania','44':'Rhode Island',
-      '45':'South Carolina','46':'South Dakota','47':'Tennessee','48':'Texas','49':'Utah','50':'Vermont',
-      '51':'Virginia','53':'Washington','54':'West Virginia','55':'Wisconsin','56':'Wyoming'
-    };
-
-    // 3) Fetch assignments & GeoJSON in parallel, then render
-    Promise.all([
-      fetch(`${API}?func=getAssignments`).then(r => r.json()),
-      fetch(`${API}?func=getGeoJSON`).then(r => r.json())
-    ]).then(([assignments, geojson]) => {
-      const lookup = {};
-      assignments.forEach(a => {
-        lookup[`${a.state}|${a.county}`] = a;
-      });
-      renderMap(geojson, lookup);
-    })
-    .catch(err => console.error('Data load error:', err));
-
-    function renderMap(geo, lookup) {
+<script src="https://cdn.jsdelivr.net/npm/leaflet@1.9.4/dist/leaflet.js"></script>
+<script>
+  fetch('gz_2010_us_050_00_20m.json')
+    .then(r => r.json())
+    .then(geojson => {
       const map = L.map('map').setView([37.8, -96], 4);
-      L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png')
-        .addTo(map);
+      L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png').addTo(map);
+      L.geoJSON(geojson).addTo(map);
+    })
+    .catch(e => console.error('GeoJSON load error:', e));
+</script>
 
-      // Info panel
-      const info = L.control();
-      info.onAdd = () => {
-        const div = L.DomUtil.create('div','info');
-        div.innerHTML = '<h4>County Info</h4>Click a county';
-        return div;
-      };
-      info.addTo(map);
-
-      // Draw counties
-      L.geoJSON(geo, {
-        style: feature => {
-          const st  = stateNames[feature.properties.STATEFP] || 'Unknown';
-          const key = `${st}|${feature.properties.NAME}`;
-          const taken = lookup[key]?.status === 'Taken';
-          return {
-            fillColor: taken ? '#00ff00' : '#ff0000',
-            color: '#333',
-            weight: 1,
-            fillOpacity: 0.7
-          };
-        },
-        onEachFeature: (feature, layer) => {
-          layer.on('click', () => {
-            const st = stateNames[feature.properties.STATEFP] || 'Unknown';
-            const cn = feature.properties.NAME;
-            const a  = lookup[`${st}|${cn}`] || {};
-            info.getContainer().innerHTML =
-              `<h4>${cn}, ${st}</h4>` +
-              `Status: ${a.status || 'Open'}<br>` +
-              `Owner: ${a.owner || '—'}<br>` +
-              (a.link
-                ? `Link: <a href="${a.link}" target="_blank">Visit Group</a>`
-                : 'Link: None');
-          });
-        }
-      }).addTo(map);
-    }
-  </script>
-</body>
-</html>
 
