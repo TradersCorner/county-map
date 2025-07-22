@@ -30,11 +30,11 @@
       const styledLayer = L.geoJSON(countyData, {
         style: feature => {
           const countyName = feature.properties.NAME.trim().toLowerCase();
-          const stateName = feature.properties.STATE_NAME.trim().toLowerCase(); // Adjust if using STATE instead
+          const stateCode = feature.properties.STATE.trim().toLowerCase(); // uses "AL", "TX", etc.
 
           const match = assignments.find(a =>
-            a.county.toLowerCase().includes(countyName) &&
-            a.state.toLowerCase() === stateName
+            a.county.toLowerCase().replace(' county', '') === countyName &&
+            a.state.toLowerCase() === stateCode
           );
 
           return {
@@ -45,11 +45,11 @@
         },
         onEachFeature: (feature, layer) => {
           const countyName = feature.properties.NAME.trim().toLowerCase();
-          const stateName = feature.properties.STATE_NAME.trim().toLowerCase();
+          const stateCode = feature.properties.STATE.trim().toLowerCase();
 
           const match = assignments.find(a =>
-            a.county.toLowerCase().includes(countyName) &&
-            a.state.toLowerCase() === stateName
+            a.county.toLowerCase().replace(' county', '') === countyName &&
+            a.state.toLowerCase() === stateCode
           );
 
           if (match) {
@@ -57,10 +57,10 @@
               <strong>${match.county}, ${match.state}</strong><br>
               Status: Taken<br>
               ${match.owner ? `Owner: ${match.owner}<br>` : ''}
-              <a href="${match.link}" target="_blank">Facebook Group</a>
+              ${match.link ? `<a href="${match.link}" target="_blank">Facebook Group</a>` : ''}
             `);
           } else {
-            layer.bindPopup(`<strong>${feature.properties.NAME}, ${feature.properties.STATE_NAME}</strong><br>Status: Open`);
+            layer.bindPopup(`<strong>${feature.properties.NAME}, ${feature.properties.STATE}</strong><br>Status: Open`);
           }
         }
       });
@@ -68,33 +68,32 @@
       styledLayer.addTo(map);
     }
 
-    // Handle postMessage data from Apps Script
     window.addEventListener("message", (event) => {
-  const msg = event.data;
-  if (msg && typeof msg === 'object') {
-    if (msg.type === 'FeatureCollection') {
-      console.log("✅ GeoJSON loaded:", msg.features.length, "features");
-      countyData = msg;
-    } else if (Array.isArray(msg)) {
-      console.log("✅ Assignments loaded:", msg.length, "rows");
-      assignments = msg;
-    }
-    tryRenderMap();
-  }
-});
+      const msg = event.data;
+      if (msg && typeof msg === 'object') {
+        if (msg.type === 'FeatureCollection') {
+          console.log("✅ GeoJSON loaded:", msg.features.length, "features");
+          countyData = msg;
+        } else if (Array.isArray(msg)) {
+          console.log("✅ Assignments loaded:", msg.length, "rows");
+          assignments = msg;
+        }
+        tryRenderMap();
+      }
+    });
 
+    const base = 'https://script.google.com/macros/s/AKfycbzB3_7QgYPyD8_9L2wBVswCTKthBYJkhfhB_cOJLaXB7byKzs2xStgHACt0g6wlLxc1JA/exec';
 
-    // Load both datasets via iframe
-    const base = 'https://script.google.com/macros/s/PASTE_YOUR_DEPLOYED_ID_HERE/exec';
-    const geoFrame = document.createElement("iframe");
-    geoFrame.style.display = "none";
-    geoFrame.src = base + '?func=getGeoJSON';
-    document.body.appendChild(geoFrame);
+    const iframe1 = document.createElement("iframe");
+    iframe1.style.display = "none";
+    iframe1.src = base + '?func=getGeoJSON';
+    document.body.appendChild(iframe1);
 
-    const assignFrame = document.createElement("iframe");
-    assignFrame.style.display = "none";
-    assignFrame.src = base + '?func=getAssignments';
-    document.body.appendChild(assignFrame);
+    const iframe2 = document.createElement("iframe");
+    iframe2.style.display = "none";
+    iframe2.src = base + '?func=getAssignments';
+    document.body.appendChild(iframe2);
   </script>
 </body>
 </html>
+
