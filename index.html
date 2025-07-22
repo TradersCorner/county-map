@@ -20,27 +20,25 @@
 
   <!-- Leaflet JS -->
   <script src="https://cdn.jsdelivr.net/npm/leaflet@1.9.4/dist/leaflet.js"></script>
-  <script>
-  // Initialize the map centered over the continental US
+<script>
+  // Initialize map
   const map = L.map('map').setView([37.8, -96], 4);
 
-  // Base tile layer
   L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
     maxZoom: 10,
     attribution: '&copy; OpenStreetMap contributors'
   }).addTo(map);
 
-  // Replace with your actual deployed Apps Script URL:
-  const geoJsonURL = 'https://script.google.com/macros/s/AKfycbzB3_7QgYPyD8_9L2wBVswCTKthBYJkhfhB_cOJLaXB7byKzs2xStgHACt0g6wlLxc1JA/exec';
+  // Load data via iframe to bypass CORS
+  const iframe = document.createElement("iframe");
+  iframe.style.display = "none";
+  iframe.src = "https://script.google.com/macros/s/AKfycbzB3_7QgYPyD8_9L2wBVswCTKthBYJkhfhB_cOJLaXB7byKzs2xStgHACt0g6wlLxc1JA/exec?func=getGeoJSON";
+  document.body.appendChild(iframe);
 
-  fetch(geoJsonURL)
-    .then(response => {
-      if (!response.ok) {
-        throw new Error('GeoJSON load failed: ' + response.status);
-      }
-      return response.json();
-    })
-    .then(geojson => {
+  // Listen for response from iframe
+  window.addEventListener("message", (event) => {
+    try {
+      const geojson = JSON.parse(event.data);
       L.geoJSON(geojson, {
         style: {
           color: '#00aaff',
@@ -48,15 +46,12 @@
           fillOpacity: 0.3
         }
       }).addTo(map);
-    })
-    .catch(err => {
-      console.error('Map load error:', err);
-      const msg = document.createElement('div');
-      msg.style = 'position:absolute;top:10px;left:10px;padding:10px;background:rgba(255,0,0,0.8);color:#fff;';
-      msg.textContent = err.message;
-      document.body.appendChild(msg);
-    });
+    } catch (e) {
+      console.error('Invalid GeoJSON received:', e, event.data);
+    }
+  });
 </script>
+
 
 </body>
 </html>
