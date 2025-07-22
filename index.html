@@ -20,37 +20,39 @@
 
   <!-- Leaflet JS -->
   <script src="https://cdn.jsdelivr.net/npm/leaflet@1.9.4/dist/leaflet.js"></script>
-<script>
-  // Initialize map
-  const map = L.map('map').setView([37.8, -96], 4);
+  <script>
+    // Initialize map
+    const map = L.map('map').setView([37.8, -96], 4);
 
-  L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
-    maxZoom: 10,
-    attribution: '&copy; OpenStreetMap contributors'
-  }).addTo(map);
+    L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
+      maxZoom: 10,
+      attribution: '&copy; OpenStreetMap contributors'
+    }).addTo(map);
 
-  // Load data via iframe to bypass CORS
-  const iframe = document.createElement("iframe");
-  iframe.style.display = "none";
-  iframe.src = "https://script.google.com/macros/s/AKfycbzB3_7QgYPyD8_9L2wBVswCTKthBYJkhfhB_cOJLaXB7byKzs2xStgHACt0g6wlLxc1JA/exec?func=getGeoJSON";
-  document.body.appendChild(iframe);
+    // Load data via iframe to bypass CORS
+    const iframe = document.createElement("iframe");
+    iframe.style.display = "none";
+    iframe.src = "https://script.google.com/macros/s/AKfycbzB3_7QgYPyD8_9L2wBVswCTKthBYJkhfhB_cOJLaXB7byKzs2xStgHACt0g6wlLxc1JA/exec?func=getGeoJSON";
+    document.body.appendChild(iframe);
 
-  // Listen for response from iframe
-  window.addEventListener("message", (event) => {
-    try {
-      const geojson = JSON.parse(event.data);
-      L.geoJSON(geojson, {
-        style: {
-          color: '#00aaff',
-          weight: 0.6,
-          fillOpacity: 0.3
-        }
-      }).addTo(map);
-    } catch (e) {
-      console.error('Invalid GeoJSON received:', e, event.data);
-    }
-  });
-</script>
+    // Listen for response from iframe
+    window.addEventListener("message", (event) => {
+      try {
+        const geojson = event.data; // ✅ No need to parse again
+        L.geoJSON(geojson, {
+          style: {
+            color: '#00aaff',
+            weight: 0.6,
+            fillOpacity: 0.3
+          }
+        }).addTo(map);
+      } catch (e) {
+        console.error('Invalid GeoJSON received:', e, event.data);
+      }
+    });
+  </script>
+</body>
+</html>
 
 
 </body>
