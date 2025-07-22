@@ -70,16 +70,19 @@
 
     // Handle postMessage data from Apps Script
     window.addEventListener("message", (event) => {
-      const msg = event.data;
-      if (msg && typeof msg === 'object') {
-        if (msg.type === 'FeatureCollection') {
-          countyData = msg;
-        } else if (Array.isArray(msg)) {
-          assignments = msg;
-        }
-        tryRenderMap();
-      }
-    });
+  const msg = event.data;
+  if (msg && typeof msg === 'object') {
+    if (msg.type === 'FeatureCollection') {
+      console.log("✅ GeoJSON loaded:", msg.features.length, "features");
+      countyData = msg;
+    } else if (Array.isArray(msg)) {
+      console.log("✅ Assignments loaded:", msg.length, "rows");
+      assignments = msg;
+    }
+    tryRenderMap();
+  }
+});
+
 
     // Load both datasets via iframe
     const base = 'https://script.google.com/macros/s/PASTE_YOUR_DEPLOYED_ID_HERE/exec';
