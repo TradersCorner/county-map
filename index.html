@@ -20,7 +20,7 @@
 
   <!-- Leaflet JS -->
   <script src="https://cdn.jsdelivr.net/npm/leaflet@1.9.4/dist/leaflet.js"></script>
-  <script>
+<script>
   // Initialize map
   const map = L.map('map').setView([37.8, -96], 4);
 
@@ -29,16 +29,25 @@
     attribution: '&copy; OpenStreetMap contributors'
   }).addTo(map);
 
-  // Load GeoJSON from iframe
+  // Load GeoJSON via iframe
   const iframe = document.createElement("iframe");
   iframe.style.display = "none";
   iframe.src = "https://script.google.com/macros/s/AKfycbzB3_7QgYPyD8_9L2wBVswCTKthBYJkhfhB_cOJLaXB7byKzs2xStgHACt0g6wlLxc1JA/exec?func=getGeoJSON";
   document.body.appendChild(iframe);
 
-  // Listen for postMessage from iframe
+  // Safely handle only messages from the iframe
   window.addEventListener("message", (event) => {
     try {
-      const geojson = event.data; // ✅ no parse
+      // Only handle messages from the Google Apps Script iframe
+      if (!event.data || typeof event.data !== 'object' || !event.data.type && !event.data.features) return;
+
+      const geojson = event.data;
+
+      // Basic GeoJSON validation
+      if (!geojson.type || geojson.type !== 'FeatureCollection') {
+        throw new Error("Not valid GeoJSON");
+      }
+
       L.geoJSON(geojson, {
         style: {
           color: '#00aaff',
@@ -51,6 +60,7 @@
     }
   });
 </script>
+
 
 </body>
 </html>
