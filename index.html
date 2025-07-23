@@ -4,8 +4,6 @@
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width,initial-scale=1" />
   <title>U.S. County Map</title>
-
-  <!-- Leaflet CSS -->
   <link
     rel="stylesheet"
     href="https://cdn.jsdelivr.net/npm/leaflet@1.9.4/dist/leaflet.css"
@@ -17,102 +15,74 @@
 </head>
 <body>
   <div id="map"></div>
-
-  <!-- Leaflet JS -->
   <script src="https://cdn.jsdelivr.net/npm/leaflet@1.9.4/dist/leaflet.js"></script>
-
   <script>
-    // ─── A) DEFINE U.S. BOUNDS (incl. AK + HI) ────────────────────────────────
+    // ─── A) U.S. bounds incl. AK+HI ──────────────────────────────────────────
     var usBounds = [[14, -170], [72, -50]];
 
-    // ─── B) INITIALIZE MAP ─────────────────────────────────────────────────────
+    // ─── B) Init Leaflet map ─────────────────────────────────────────────────
     var map = L.map('map', {
-      minZoom: 3,
-      maxZoom: 10,
-      maxBounds: usBounds,
-      maxBoundsViscosity: 1.0,
+      minZoom: 3, maxZoom: 10,
+      maxBounds: usBounds, maxBoundsViscosity: 1.0,
       worldCopyJump: false
     }).setView([37.8, -96], 4);
 
-    L.tileLayer(
-      'https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
-        noWrap: true,
-        maxZoom: 10,
-        attribution: '&copy; OpenStreetMap contributors'
-      }
-    ).addTo(map);
+    L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
+      noWrap: true, maxZoom: 10,
+      attribution: '&copy; OpenStreetMap contributors'
+    }).addTo(map);
 
-    // ─── C) DATA HOLDERS ───────────────────────────────────────────────────────
-    var countyGeo = null;
-    var assignments = null;
+    // ─── C) Holders ────────────────────────────────────────────────────────────
+    var countyGeo = null, assignments = null;
 
-    // ─── D) RENDER FUNCTION ────────────────────────────────────────────────────
+    // ─── D) Render when ready ──────────────────────────────────────────────────
     function tryRenderMap() {
       if (!countyGeo || !assignments) return;
-      console.log('Rendering', countyGeo.features.length, 'counties; assignments:', assignments.length);
-
+      console.log('Rendering', countyGeo.features.length, 'counties with', assignments.length, 'assignments');
       L.geoJSON(countyGeo, {
-        style: function(feat) {
-          var cName = feat.properties.NAME.trim().toLowerCase();
-          var sName = feat.properties.STATE.trim().toLowerCase();
-          for (var i = 0; i < assignments.length; i++) {
-            var a = assignments[i];
-            if (
-              a.state.trim().toLowerCase() === sName &&
-              a.county.trim().toLowerCase().replace(' county','') === cName
-            ) {
-              return { color:'red', weight:0.5, fillOpacity:0.4 };
-            }
-          }
-          return { color:'green', weight:0.5, fillOpacity:0.4 };
+        style: function(f) {
+          var c = f.properties.NAME.toLowerCase().replace(' county','').trim();
+          var s = f.properties.STATE.toLowerCase().trim();
+          var taken = assignments.some(a =>
+            a.state.toLowerCase().trim() === s &&
+            a.county.toLowerCase().replace(' county','').trim() === c
+          );
+          return { color: taken?'red':'green', weight:0.5, fillOpacity:0.4 };
         },
-        onEachFeature: function(feat, layer) {
-          var cName = feat.properties.NAME.trim().toLowerCase();
-          var sName = feat.properties.STATE.trim().toLowerCase();
-          var popup = '<strong>' + feat.properties.NAME + ', ' + feat.properties.STATE + '</strong><br>Status: Open';
-          for (var i = 0; i < assignments.length; i++) {
-            var a = assignments[i];
-            if (
-              a.state.trim().toLowerCase() === sName &&
-              a.county.trim().toLowerCase().replace(' county','') === cName
-            ) {
-              popup = '<strong>' + a.county + ', ' + a.state + '</strong><br>Status: Taken';
-              if (a.owner) popup += '<br>Owner: ' + a.owner;
-              if (a.link)  popup += '<br><a href="' + a.link + '" target="_blank">Facebook Group</a>';
-              break;
-            }
+        onEachFeature: function(f, layer) {
+          var name = f.properties.NAME + ', ' + f.properties.STATE;
+          var c = f.properties.NAME.toLowerCase().replace(' county','').trim();
+          var s = f.properties.STATE.toLowerCase().trim();
+          var a = assignments.find(a =>
+            a.state.toLowerCase().trim() === s &&
+            a.county.toLowerCase().replace(' county','').trim() === c
+          );
+          var popup = '<strong>' + name + '</strong><br>Status: ' + (a?'Taken':'Open');
+          if (a) {
+            if (a.owner) popup += '<br>Owner: ' + a.owner;
+            if (a.link)  popup += '<br><a href="' + a.link + '" target="_blank">Facebook Group</a>';
           }
           layer.bindPopup(popup);
         }
       }).addTo(map);
     }
 
-    // ─── E) LOAD COUNTY GEOJSON ──────────────────────────────────────────────────
-    console.log('Loading county shapes…');
+    // ─── E) Load county GeoJSON ─────────────────────────────────────────────────
+    console.log('Loading counties…');
     fetch('gz_2010_us_050_00_20m.json')
-      .then(function(res) {
-        if (!res.ok) throw new Error('GeoJSON load failed: ' + res.status);
-        return res.json();
-      })
-      .then(function(data) {
-        console.log('Loaded counties:', data.features.length);
-        countyGeo = data;
-        tryRenderMap();
-      })
-      .catch(function(err) {
-        console.error('County GeoJSON error:', err);
-      });
+      .then(r => r.json())
+      .then(g => { countyGeo = g; console.log('Counties loaded:', g.features.length); tryRenderMap(); });
 
-    // ─── F) JSONP CALLBACK ─────────────────────────────────────────────────────
+    // ─── F) JSONP callback ─────────────────────────────────────────────────────
     function assignmentsLoaded(data) {
-      console.log('Assignments (JSONP) loaded:', data.length, 'rows');
       assignments = data;
+      console.log('Assignments loaded:', data.length);
       tryRenderMap();
     }
 
-    // ─── G) INJECT JSONP SCRIPT TAG ─────────────────────────────────────────────
+    // ─── G) Inject JSONP <script> ───────────────────────────────────────────────
     console.log('Requesting assignments via JSONP…');
-    (function() {
+    (function(){
       var s = document.createElement('script');
       s.src = 'https://script.google.com/macros/s/AKfycbzB3_7QgYPyD8_9L2wBVswCTKthBYJkhfhB_cOJLaXB7byKzs2xStgHACt0g6wlLxc1JA/exec'
             + '?func=getAssignments'
@@ -122,4 +92,5 @@
   </script>
 </body>
 </html>
+
 
