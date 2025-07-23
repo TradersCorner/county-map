@@ -92,6 +92,38 @@
         tryRenderMap();
       }
     });
+    // 6) load local county GeoJSON
+-   fetch('gz_2010_us_050_00_20m.json')
+-     .then(r => r.json())
+-     .then(data => { countyGeo = data; tryRenderMap(); })
+-     .catch(console.error);
++   fetch('gz_2010_us_050_00_20m.json')
++     .then(r => {
++       if (!r.ok) throw new Error('GeoJSON 404? got ' + r.status);
++       return r.json();
++     })
++     .then(data => {
++       console.log('✅ countyGeo loaded, features:', data.features.length);
++       countyGeo = data;
++       tryRenderMap();
++     })
++     .catch(err => console.error('County GeoJSON load error:', err));
+
+    // 7) receive assignments via iframe postMessage
+-   window.addEventListener('message', e => {
+-     if (Array.isArray(e.data)) {
+-       assignments = e.data;
+-       tryRenderMap();
+-     }
+-   });
++   window.addEventListener('message', e => {
++     console.log('✉️ message received:', e.data);
++     if (Array.isArray(e.data)) {
++       console.log('✅ assignments loaded, rows:', e.data.length);
++       assignments = e.data;
++       tryRenderMap();
++     }
++   });
 
     // 8) fire iframe to fetch assignment data
     const iframe = document.createElement('iframe');
