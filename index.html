@@ -21,33 +21,43 @@
   <!-- Leaflet JS -->
   <script src="https://cdn.jsdelivr.net/npm/leaflet@1.9.4/dist/leaflet.js"></script>
   <script>
-    // ─── 1. Define U.S. bounds to lock view ─────────────────────────────────────
+    // 1. Define continental U.S. bounds
     const usBounds = [
       [24.396308, -124.848974],  // SW corner
       [49.384358,  -66.885444]   // NE corner
     ];
 
-    // ─── 2. Initialize the map centered on the U.S., locked to bounds ─────────
+    // 2. Initialize the map (no hard maxBounds yet)
     const map = L.map('map', {
-      maxBounds: usBounds,
-      maxBoundsViscosity: 0.5,  // makes the map “bounce” at the edges
       minZoom: 4,
       maxZoom: 10,
       worldCopyJump: false
     }).setView([37.8, -96], 4);
 
-    // ─── 3. Add OSM tiles with noWrap to prevent world wrapping ────────────────
+    // 3. Add OSM tiles without global wrapping
     L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
       noWrap: true,
       maxZoom: 10,
       attribution: '&copy; OpenStreetMap contributors'
     }).addTo(map);
 
-    // ─── 4. Holders for loaded data ────────────────────────────────────────────
+    // 4. Toggle bounds only when zoomed out
+    function updateBounds() {
+      if (map.getZoom() <= 6) {
+        map.setMaxBounds(usBounds);
+      } else {
+        map.setMaxBounds(null);
+      }
+    }
+    map.on('zoomend', updateBounds);
+    // apply initial bounds
+    updateBounds();
+
+    // 5. Data holders
     let countyGeo = null;
     let assignments = null;
 
-    // ─── 5. Attempt to render once both data sets are available ───────────────
+    // 6. Render counties when both datasets are ready
     function tryRenderMap() {
       if (!countyGeo || !assignments) return;
 
@@ -72,7 +82,6 @@
             a.county.trim().toLowerCase().replace(' county','') === name &&
             a.state.trim().toLowerCase() === state
           );
-
           if (match) {
             layer.bindPopup(
               `<strong>${match.county}, ${match.state}</strong><br>` +
@@ -90,7 +99,7 @@
       }).addTo(map);
     }
 
-    // ─── 6. Load the county GeoJSON (local file) ──────────────────────────────
+    // 7. Load local county GeoJSON
     fetch('gz_2010_us_050_00_20m.json')
       .then(res => res.json())
       .then(data => {
@@ -99,7 +108,7 @@
       })
       .catch(err => console.error('County GeoJSON load error:', err));
 
-    // ─── 7. Listen for assignments data via postMessage ───────────────────────
+    // 8. Listen for assignment data via postMessage
     window.addEventListener('message', event => {
       if (Array.isArray(event.data)) {
         assignments = event.data;
@@ -107,7 +116,7 @@
       }
     });
 
-    // ─── 8. Kick off the iframe to fetch assignments ───────────────────────────
+    // 9. Fire off iframe to fetch getAssignments()
     const iframe = document.createElement('iframe');
     iframe.style.display = 'none';
     iframe.src = 'https://script.google.com/macros/s/AKfycbzB3_7QgYPyD8_9L2wBVswCTKthBYJkhfhB_cOJLaXB7byKzs2xStgHACt0g6wlLxc1JA/exec?func=getAssignments';
@@ -115,5 +124,4 @@
   </script>
 </body>
 </html>
-
 
