@@ -1,123 +1,72 @@
-<script>
-  // 1) U.S. bounds including Alaska & Hawaii
-  var usBounds = [[14, -170], [72, -50]];
+<!DOCTYPE html>
+<html>
+<head>
+  <meta charset="utf-8">
+  <title>US County Map with D3</title>
+  <script src="https://unpkg.com/d3@7"></script>
+  <script src="https://unpkg.com/topojson-client@3"></script>
+  <style>
+    body { margin:0; }
+    svg { display:block; width:100vw; height:100vh; }
+    .county { stroke:#fff; stroke-width:0.2; }
+  </style>
+</head>
+<body>
+  <svg></svg>
+  <script>
+  // 1) Projection & path
+  const projection = d3.geoAlbersUsa();
+  const path = d3.geoPath(projection);
 
-  // 2) Initialize Leaflet map
-  var map = L.map('map', {
-    minZoom: 3,
-    maxZoom: 10,
-    maxBounds: usBounds,
-    maxBoundsViscosity: 1.0,
-    worldCopyJump: false
-  }).setView([37.8, -96], 4);
+  // 2) Color scale
+  const color = d3.scaleOrdinal()
+    .domain(['Taken','Open'])
+    .range(['#e31a1c','#31a354']);
 
-  L.tileLayer(
-    'https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png',
-    {
-      noWrap: true,
-      maxZoom: 10,
-      attribution: '&copy; OpenStreetMap contributors'
-    }
-  ).addTo(map);
+  // 3) Load both county geometries and your assignment data
+  Promise.all([
+    d3.json('https://cdn.jsdelivr.net/npm/us-atlas@3/counties-10m.json'),
+    d3.json('https://script.google.com/macros/s/.../exec?func=getAssignments')
+  ]).then(([us, assignments]) => {
+    // convert TopoJSON → GeoJSON
+    const counties = topojson.feature(us, us.objects.counties).features;
 
-  // 3) Data holders
-  var countyGeo = null;
-  var assignments = null;
-
-  // 4) Render function
-  function tryRenderMap() {
-    if (countyGeo === null || assignments === null) {
-      return;
-    }
-    console.log('🎨 Rendering', countyGeo.features.length, 'counties with', assignments.length, 'assignments');
-
-    var layer = L.geoJSON(countyGeo, {
-      style: function(feature) {
-        var name  = feature.properties.NAME.trim().toLowerCase();
-        var state = feature.properties.STATE.trim().toLowerCase();
-        var match = null;
-        for (var i = 0; i < assignments.length; i++) {
-          var a = assignments[i];
-          if (
-            a.county.trim().toLowerCase().replace(' county','') === name &&
-            a.state.trim().toLowerCase() === state
-          ) {
-            match = a;
-            break;
-          }
-        }
-        return {
-          color: match ? 'red' : 'green',
-          weight: 0.5,
-          fillOpacity: 0.4
-        };
-      },
-      onEachFeature: function(feature, layer) {
-        var name  = feature.properties.NAME.trim().toLowerCase();
-        var state = feature.properties.STATE.trim().toLowerCase();
-        var match = null;
-        for (var i = 0; i < assignments.length; i++) {
-          var a = assignments[i];
-          if (
-            a.county.trim().toLowerCase().replace(' county','') === name &&
-            a.state.trim().toLowerCase() === state
-          ) {
-            match = a;
-            break;
-          }
-        }
-        var title = match
-          ? (match.county + ', ' + match.state + ' (Taken)')
-          : (feature.properties.NAME + ', ' + feature.properties.STATE + ' (Open)');
-        var popup = '<strong>' + title + '</strong>';
-        if (match && match.link) {
-          popup += '<br><a href="' + match.link + '" target="_blank">Facebook Group</a>';
-        }
-        if (match && match.owner) {
-          popup += '<br>Owner: ' + match.owner;
-        }
-        layer.bindPopup(popup);
-      }
-    });
-    layer.addTo(map);
-  }
-
-  // 5) Load counties GeoJSON
-  console.log('⏳ Fetching counties GeoJSON...');
-  fetch('gz_2010_us_050_00_20m.json')
-    .then(function(res) {
-      if (!res.ok) {
-        throw new Error('GeoJSON load failed: ' + res.status);
-      }
-      return res.json();
-    })
-    .then(function(data) {
-      console.log('✅ countyGeo loaded:', data.features.length, 'features');
-      countyGeo = data;
-      tryRenderMap();
-    })
-    .catch(function(err) {
-      console.error('❌ County GeoJSON error:', err);
+    // build a lookup by "state|county"
+    const lookup = {};
+    assignments.forEach(d => {
+      const k = d.state.toLowerCase() + '|' + 
+                d.county.toLowerCase().replace(' county','');
+      lookup[k] = 'Taken';
     });
 
-  // 6) Listen for assignments via postMessage
-  console.log('⏳ Waiting for assignments...');
-  window.addEventListener('message', function(e) {
-    console.log('✉️ message received:', e.data);
-    if (Array.isArray(e.data)) {
-      console.log('✅ assignments loaded:', e.data.length, 'rows');
-      assignments = e.data;
-      tryRenderMap();
-    }
+    // 4) Draw
+    d3.select('svg')
+      .selectAll('path')
+      .data(counties)
+      .enter()
+      .append('path')
+        .attr('class','county')
+        .attr('d', path)
+        .attr('fill', d => {
+          // your TopoJSON has a numeric id, but you can map it to state/county names
+          const props = d.properties;
+          const key = props.state.toLowerCase() + '|' + 
+                      props.name.toLowerCase().replace(' county','');
+          return lookup[key] ? color('Taken') : color('Open');
+        })
+      .on('click', d => {
+        const props = d.properties;
+        const key = props.state.toLowerCase() + '|' + 
+                    props.name.toLowerCase().replace(' county','');
+        if (lookup[key]) {
+          const rec = assignments.find(a => 
+            a.state.toLowerCase() === props.state.toLowerCase() &&
+            a.county.toLowerCase().replace(' county','') === props.name.toLowerCase()
+          );
+          alert(`${rec.county}, ${rec.state}\nLink: ${rec.link}`);
+        }
+      });
   });
-
-  // 7) Fire off iframe to fetch assignments
-  console.log('⏳ Injecting iframe for assignments...');
-  var iframe = document.createElement('iframe');
-  iframe.style.display = 'none';
-  iframe.src =
-    'https://script.google.com/macros/s/AKfycbzB3_7QgYPyD8_9L2wBVswCTKthBYJkhfhB_cOJLaXB7byKzs2xStgHACt0g6wlLxc1JA/exec?func=getAssignments';
-  document.body.appendChild(iframe);
-</script>
-
-
+  </script>
+</body>
+</html>
