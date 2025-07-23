@@ -1,137 +1,92 @@
-<!DOCTYPE html>
-<html lang="en">
-<head>
-  <meta charset="utf-8" />
-  <meta name="viewport" content="width=device-width,initial-scale=1" />
-  <title>U.S. County Map</title>
-  <link
-    rel="stylesheet"
-    href="https://cdn.jsdelivr.net/npm/leaflet@1.9.4/dist/leaflet.css"
-  />
-  <style>
-    html, body { margin:0; padding:0; height:100%; }
-    #map { width:100%; height:100%; }
-  </style>
-</head>
-<body>
-  <div id="map"></div>
-  <script src="https://cdn.jsdelivr.net/npm/leaflet@1.9.4/dist/leaflet.js"></script>
-  <script>
-    // 1) static bounds covering ALL US (incl. AK + HI)
-    const usBounds = [
-      [14,  -170],  // SW: a bit below Hawaii
-      [72,   -50]   // NE: a bit east of Maine
-    ];
+<script>
+  // ─── 1) Define U.S. bounds (incl. AK + HI) ─────────────────────────────────
+  const usBounds = [
+    [14,  -170],  // SW: a bit south of Hawaii
+    [72,   -50]   // NE: a bit east of Maine
+  ];
 
-    // 2) init map, always locked to those bounds
-    const map = L.map('map', {
-      minZoom: 3,              // zoom out enough to see AK & HI
-      maxZoom: 10,             // limit how far you can zoom in
-      maxBounds: usBounds,     // restrict panning
-      maxBoundsViscosity: 1.0, // “stick” to the edges
-      worldCopyJump: false
-    }).setView([37.8, -96], 4);
+  // ─── 2) Init map, locked to those bounds ──────────────────────────────────
+  const map = L.map('map', {
+    minZoom: 3,
+    maxZoom: 10,
+    maxBounds: usBounds,
+    maxBoundsViscosity: 1.0,
+    worldCopyJump: false
+  }).setView([37.8, -96], 4);
 
-    // 3) base tiles, no wrapping
-    L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
-      noWrap: true,
-      maxZoom: 10,
-      attribution: '&copy; OpenStreetMap contributors'
-    }).addTo(map);
+  L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
+    noWrap: true,
+    maxZoom: 10,
+    attribution: '&copy; OpenStreetMap contributors'
+  }).addTo(map);
 
-    // 4) placeholders
-    let countyGeo = null, assignments = null;
+  // ─── 3) Data holders ──────────────────────────────────────────────────────
+  let countyGeo = null;
+  let assignments = null;
 
-    // 5) render once both are loaded
-    function tryRenderMap() {
-      if (!countyGeo || !assignments) return;
-      L.geoJSON(countyGeo, {
-        style: f => {
-          const c = f.properties.NAME.trim().toLowerCase();
-          const s = f.properties.STATE.trim().toLowerCase();
-          const m = assignments.find(a =>
-            a.county.trim().toLowerCase().replace(' county','') === c &&
-            a.state.trim().toLowerCase() === s
-          );
-          return { color: m ? 'red' : 'green', weight:0.5, fillOpacity:0.4 };
-        },
-        onEachFeature: (f, layer) => {
-          const c = f.properties.NAME.trim().toLowerCase();
-          const s = f.properties.STATE.trim().toLowerCase();
-          const m = assignments.find(a =>
-            a.county.trim().toLowerCase().replace(' county','') === c &&
-            a.state.trim().toLowerCase() === s
-          );
-          if (m) {
-            layer.bindPopup(
-              `<strong>${m.county}, ${m.state}</strong><br>` +
-              `Status: Taken<br>` +
-              `${m.owner?`Owner: ${m.owner}<br>`:''}` +
-              `<a href="${m.link}" target="_blank">Facebook Group</a>`
-            );
-          } else {
-            layer.bindPopup(
-              `<strong>${f.properties.NAME}, ${f.properties.STATE}</strong><br>` +
-              `Status: Open`
-            );
-          }
-        }
-      }).addTo(map);
-    }
+  // ─── 4) Render when ready ─────────────────────────────────────────────────
+  function tryRenderMap() {
+    if (!countyGeo || !assignments) return;
+    console.log('🎨 Rendering map with', countyGeo.features.length, 'counties and', assignments.length, 'assignments');
 
-    // 6) load local county GeoJSON
-    fetch('gz_2010_us_050_00_20m.json')
-      .then(r => r.json())
-      .then(data => { countyGeo = data; tryRenderMap(); })
-      .catch(console.error);
-
-    // 7) receive assignments via iframe postMessage
-    window.addEventListener('message', e => {
-      if (Array.isArray(e.data)) {
-        assignments = e.data;
-        tryRenderMap();
+    L.geoJSON(countyGeo, {
+      style: f => {
+        const c = f.properties.NAME.trim().toLowerCase();
+        const s = f.properties.STATE.trim().toLowerCase();
+        const m = assignments.find(a =>
+          a.county.trim().toLowerCase().replace(' county','') === c &&
+          a.state.trim().toLowerCase() === s
+        );
+        return { color: m ? 'red' : 'green', weight:0.5, fillOpacity:0.4 };
+      },
+      onEachFeature: (f, layer) => {
+        const c = f.properties.NAME.trim().toLowerCase();
+        const s = f.properties.STATE.trim().toLowerCase();
+        const m = assignments.find(a =>
+          a.county.trim().toLowerCase().replace(' county','') === c &&
+          a.state.trim().toLowerCase() === s
+        );
+        const title = m
+          ? `${m.county}, ${m.state} (Taken)`
+          : `${f.properties.NAME}, ${f.properties.STATE} (Open)`;
+        let popup = `<strong>${title}</strong>`;
+        if (m && m.link) popup += `<br><a href="${m.link}" target="_blank">Facebook Group</a>`;
+        if (m && m.owner) popup += `<br>Owner: ${m.owner}`;
+        layer.bindPopup(popup);
       }
-    });
-    // 6) load local county GeoJSON
--   fetch('gz_2010_us_050_00_20m.json')
--     .then(r => r.json())
--     .then(data => { countyGeo = data; tryRenderMap(); })
--     .catch(console.error);
-+   fetch('gz_2010_us_050_00_20m.json')
-+     .then(r => {
-+       if (!r.ok) throw new Error('GeoJSON 404? got ' + r.status);
-+       return r.json();
-+     })
-+     .then(data => {
-+       console.log('✅ countyGeo loaded, features:', data.features.length);
-+       countyGeo = data;
-+       tryRenderMap();
-+     })
-+     .catch(err => console.error('County GeoJSON load error:', err));
+    }).addTo(map);
+  }
 
-    // 7) receive assignments via iframe postMessage
--   window.addEventListener('message', e => {
--     if (Array.isArray(e.data)) {
--       assignments = e.data;
--       tryRenderMap();
--     }
--   });
-+   window.addEventListener('message', e => {
-+     console.log('✉️ message received:', e.data);
-+     if (Array.isArray(e.data)) {
-+       console.log('✅ assignments loaded, rows:', e.data.length);
-+       assignments = e.data;
-+       tryRenderMap();
-+     }
-+   });
+  // ─── 5) Load county GeoJSON ─────────────────────────────────────────────────
+  console.log('⏳ Fetching county GeoJSON...');
+  fetch('gz_2010_us_050_00_20m.json')
+    .then(res => {
+      if (!res.ok) throw new Error('GeoJSON load failed: ' + res.status);
+      return res.json();
+    })
+    .then(data => {
+      console.log('✅ countyGeo loaded:', data.features.length, 'features');
+      countyGeo = data;
+      tryRenderMap();
+    })
+    .catch(err => console.error('❌ County GeoJSON load error:', err));
 
-    // 8) fire iframe to fetch assignment data
-    const iframe = document.createElement('iframe');
-    iframe.style.display = 'none';
-    iframe.src =
-      'https://script.google.com/macros/s/AKfycbzB3_7QgYPyD8_9L2wBVswCTKthBYJkhfhB_cOJLaXB7byKzs2xStgHACt0g6wlLxc1JA/exec?func=getAssignments';
-    document.body.appendChild(iframe);
-  </script>
-</body>
-</html>
+  // ─── 6) Listen for assignment data ────────────────────────────────────────
+  window.addEventListener('message', ev => {
+    console.log('✉️ postMessage received:', ev.data);
+    if (Array.isArray(ev.data)) {
+      console.log('✅ assignments loaded:', ev.data.length, 'rows');
+      assignments = ev.data;
+      tryRenderMap();
+    }
+  });
+
+  // ─── 7) Fire off iframe to fetch assignments ───────────────────────────────
+  console.log('⏳ Requesting assignments via iframe...');
+  const iframe = document.createElement('iframe');
+  iframe.style.display = 'none';
+  iframe.src = 'https://script.google.com/macros/s/AKfycbzB3_7QgYPyD8_9L2wBVswCTKthBYJkhfhB_cOJLaXB7byKzs2xStgHACt0g6wlLxc1JA/exec?func=getAssignments';
+  document.body.appendChild(iframe);
+</script>
+
 
