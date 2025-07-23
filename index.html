@@ -15,76 +15,94 @@
 </head>
 <body>
   <div id="map"></div>
+
+  <!-- Leaflet JS -->
   <script src="https://cdn.jsdelivr.net/npm/leaflet@1.9.4/dist/leaflet.js"></script>
+
   <script>
-    // ─── A) U.S. bounds incl. AK+HI ──────────────────────────────────────────
+    // ─── A) U.S. bounds (incl. AK + HI) ────────────────────────────────────────
     var usBounds = [[14, -170], [72, -50]];
 
-    // ─── B) Init Leaflet map ─────────────────────────────────────────────────
+    // ─── B) Initialize the map ─────────────────────────────────────────────────
     var map = L.map('map', {
-      minZoom: 3, maxZoom: 10,
-      maxBounds: usBounds, maxBoundsViscosity: 1.0,
+      minZoom: 3,
+      maxZoom: 10,
+      maxBounds: usBounds,
+      maxBoundsViscosity: 1.0,
       worldCopyJump: false
     }).setView([37.8, -96], 4);
 
-    L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
-      noWrap: true, maxZoom: 10,
-      attribution: '&copy; OpenStreetMap contributors'
-    }).addTo(map);
+    L.tileLayer(
+      'https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png',
+      { noWrap: true, maxZoom: 10, attribution:'&copy; OpenStreetMap contributors' }
+    ).addTo(map);
 
-    // ─── C) Holders ────────────────────────────────────────────────────────────
-    var countyGeo = null, assignments = null;
+    // ─── C) Data containers ────────────────────────────────────────────────────
+    var countyGeo = null;
+    var assignments = null;
 
-    // ─── D) Render when ready ──────────────────────────────────────────────────
+    // ─── D) Render function ────────────────────────────────────────────────────
     function tryRenderMap() {
-      if (!countyGeo || !assignments) return;
+      if (!countyGeo || assignments === null) return;
       console.log('Rendering', countyGeo.features.length, 'counties with', assignments.length, 'assignments');
+
       L.geoJSON(countyGeo, {
         style: function(f) {
-          var c = f.properties.NAME.toLowerCase().replace(' county','').trim();
-          var s = f.properties.STATE.toLowerCase().trim();
-          var taken = assignments.some(a =>
-            a.state.toLowerCase().trim() === s &&
-            a.county.toLowerCase().replace(' county','').trim() === c
-          );
-          return { color: taken?'red':'green', weight:0.5, fillOpacity:0.4 };
+          var name = f.properties.NAME.toLowerCase().replace(' county','').trim();
+          var state= f.properties.STATE.toLowerCase().trim();
+          var taken = assignments.some(function(a){
+            return a.state.toLowerCase().trim()===state
+                && a.county.toLowerCase().replace(' county','').trim()===name;
+          });
+          return { color: taken ? 'red' : 'green', weight:0.5, fillOpacity:0.4 };
         },
         onEachFeature: function(f, layer) {
-          var name = f.properties.NAME + ', ' + f.properties.STATE;
-          var c = f.properties.NAME.toLowerCase().replace(' county','').trim();
-          var s = f.properties.STATE.toLowerCase().trim();
-          var a = assignments.find(a =>
-            a.state.toLowerCase().trim() === s &&
-            a.county.toLowerCase().replace(' county','').trim() === c
-          );
-          var popup = '<strong>' + name + '</strong><br>Status: ' + (a?'Taken':'Open');
-          if (a) {
-            if (a.owner) popup += '<br>Owner: ' + a.owner;
-            if (a.link)  popup += '<br><a href="' + a.link + '" target="_blank">Facebook Group</a>';
+          var display = f.properties.NAME + ', ' + f.properties.STATE;
+          var name = f.properties.NAME.toLowerCase().replace(' county','').trim();
+          var state= f.properties.STATE.toLowerCase().trim();
+          var match = assignments.find(function(a){
+            return a.state.toLowerCase().trim()===state
+                && a.county.toLowerCase().replace(' county','').trim()===name;
+          });
+          var popup = '<strong>' + display + '</strong><br>Status: ' + (match?'Taken':'Open');
+          if (match) {
+            if (match.owner) popup += '<br>Owner: ' + match.owner;
+            if (match.link)  popup += '<br><a href="' + match.link +
+                               '" target="_blank">Facebook Group</a>';
           }
           layer.bindPopup(popup);
         }
       }).addTo(map);
     }
 
-    // ─── E) Load county GeoJSON ─────────────────────────────────────────────────
-    console.log('Loading counties…');
+    // ─── E) Load local county GeoJSON ──────────────────────────────────────────
+    console.log('Loading county shapes…');
     fetch('gz_2010_us_050_00_20m.json')
-      .then(r => r.json())
-      .then(g => { countyGeo = g; console.log('Counties loaded:', g.features.length); tryRenderMap(); });
+      .then(function(res){
+        if (!res.ok) throw new Error('GeoJSON load failed: ' + res.status);
+        return res.json();
+      })
+      .then(function(data){
+        console.log('Counties loaded:', data.features.length);
+        countyGeo = data;
+        tryRenderMap();
+      })
+      .catch(function(err){
+        console.error('County GeoJSON error:', err);
+      });
 
-    // ─── F) JSONP callback ─────────────────────────────────────────────────────
+    // ─── F) JSONP callback from Apps Script ───────────────────────────────────
     function assignmentsLoaded(data) {
-      assignments = data;
       console.log('Assignments loaded:', data.length);
+      assignments = data;
       tryRenderMap();
     }
 
-    // ─── G) Inject JSONP <script> ───────────────────────────────────────────────
+    // ─── G) Inject JSONP script to load all sheets in the folder ──────────────
     console.log('Requesting assignments via JSONP…');
     (function(){
       var s = document.createElement('script');
-      s.src = 'https://script.google.com/macros/s/AKfycbzB3_7QgYPyD8_9L2wBVswCTKthBYJkhfhB_cOJLaXB7byKzs2xStgHACt0g6wlLxc1JA/exec'
+      s.src = 'https://script.google.com/macros/s/YOUR_SCRIPT_ID/exec'
             + '?func=getAssignments'
             + '&callback=assignmentsLoaded';
       document.head.appendChild(s);
@@ -92,5 +110,3 @@
   </script>
 </body>
 </html>
-
-
