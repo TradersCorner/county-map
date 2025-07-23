@@ -3,7 +3,7 @@
 <head>
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width,initial-scale=1" />
-  <title>County Map with Assignments</title>
+  <title>U.S. County Map</title>
 
   <!-- Leaflet CSS -->
   <link
@@ -21,24 +21,39 @@
   <!-- Leaflet JS -->
   <script src="https://cdn.jsdelivr.net/npm/leaflet@1.9.4/dist/leaflet.js"></script>
   <script>
-    // 1. Initialize map
-    const map = L.map('map').setView([37.8, -96], 4);
+    // ─── 1. Define U.S. bounds to lock view ─────────────────────────────────────
+    const usBounds = [
+      [24.396308, -124.848974],  // SW corner
+      [49.384358,  -66.885444]   // NE corner
+    ];
+
+    // ─── 2. Initialize the map centered on the U.S., locked to bounds ─────────
+    const map = L.map('map', {
+      maxBounds: usBounds,
+      maxBoundsViscosity: 0.5,  // makes the map “bounce” at the edges
+      minZoom: 4,
+      maxZoom: 10,
+      worldCopyJump: false
+    }).setView([37.8, -96], 4);
+
+    // ─── 3. Add OSM tiles with noWrap to prevent world wrapping ────────────────
     L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
+      noWrap: true,
       maxZoom: 10,
       attribution: '&copy; OpenStreetMap contributors'
     }).addTo(map);
 
-    // 2. Holders for data
+    // ─── 4. Holders for loaded data ────────────────────────────────────────────
     let countyGeo = null;
     let assignments = null;
 
-    // 3. Render when both are loaded
+    // ─── 5. Attempt to render once both data sets are available ───────────────
     function tryRenderMap() {
       if (!countyGeo || !assignments) return;
 
       L.geoJSON(countyGeo, {
         style: feature => {
-          const name = feature.properties.NAME.trim().toLowerCase();
+          const name  = feature.properties.NAME.trim().toLowerCase();
           const state = feature.properties.STATE.trim().toLowerCase();
           const match = assignments.find(a =>
             a.county.trim().toLowerCase().replace(' county','') === name &&
@@ -51,12 +66,13 @@
           };
         },
         onEachFeature: (feature, layer) => {
-          const name = feature.properties.NAME.trim().toLowerCase();
+          const name  = feature.properties.NAME.trim().toLowerCase();
           const state = feature.properties.STATE.trim().toLowerCase();
           const match = assignments.find(a =>
             a.county.trim().toLowerCase().replace(' county','') === name &&
             a.state.trim().toLowerCase() === state
           );
+
           if (match) {
             layer.bindPopup(
               `<strong>${match.county}, ${match.state}</strong><br>` +
@@ -74,16 +90,16 @@
       }).addTo(map);
     }
 
-    // 4. Load local GeoJSON file
+    // ─── 6. Load the county GeoJSON (local file) ──────────────────────────────
     fetch('gz_2010_us_050_00_20m.json')
-      .then(r => r.json())
+      .then(res => res.json())
       .then(data => {
         countyGeo = data;
         tryRenderMap();
       })
-      .catch(console.error);
+      .catch(err => console.error('County GeoJSON load error:', err));
 
-    // 5. Receive assignments via postMessage
+    // ─── 7. Listen for assignments data via postMessage ───────────────────────
     window.addEventListener('message', event => {
       if (Array.isArray(event.data)) {
         assignments = event.data;
@@ -91,7 +107,7 @@
       }
     });
 
-    // 6. Fire off iframe to getAssignments
+    // ─── 8. Kick off the iframe to fetch assignments ───────────────────────────
     const iframe = document.createElement('iframe');
     iframe.style.display = 'none';
     iframe.src = 'https://script.google.com/macros/s/AKfycbzB3_7QgYPyD8_9L2wBVswCTKthBYJkhfhB_cOJLaXB7byKzs2xStgHACt0g6wlLxc1JA/exec?func=getAssignments';
@@ -99,3 +115,5 @@
   </script>
 </body>
 </html>
+
+
