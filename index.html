@@ -1,12 +1,9 @@
 <script>
-  // ─── 1) Define U.S. bounds (incl. AK + HI) ─────────────────────────────────
-  const usBounds = [
-    [14,  -170],  // SW: a bit south of Hawaii
-    [72,   -50]   // NE: a bit east of Maine
-  ];
+  // 1) U.S. bounds including Alaska & Hawaii
+  var usBounds = [[14, -170], [72, -50]];
 
-  // ─── 2) Init map, locked to those bounds ──────────────────────────────────
-  const map = L.map('map', {
+  // 2) Initialize Leaflet map
+  var map = L.map('map', {
     minZoom: 3,
     maxZoom: 10,
     maxBounds: usBounds,
@@ -14,78 +11,112 @@
     worldCopyJump: false
   }).setView([37.8, -96], 4);
 
-  L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
-    noWrap: true,
-    maxZoom: 10,
-    attribution: '&copy; OpenStreetMap contributors'
-  }).addTo(map);
+  L.tileLayer(
+    'https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png',
+    {
+      noWrap: true,
+      maxZoom: 10,
+      attribution: '&copy; OpenStreetMap contributors'
+    }
+  ).addTo(map);
 
-  // ─── 3) Data holders ──────────────────────────────────────────────────────
-  let countyGeo = null;
-  let assignments = null;
+  // 3) Data holders
+  var countyGeo = null;
+  var assignments = null;
 
-  // ─── 4) Render when ready ─────────────────────────────────────────────────
+  // 4) Render function
   function tryRenderMap() {
-    if (!countyGeo || !assignments) return;
-    console.log('🎨 Rendering map with', countyGeo.features.length, 'counties and', assignments.length, 'assignments');
+    if (countyGeo === null || assignments === null) {
+      return;
+    }
+    console.log('🎨 Rendering', countyGeo.features.length, 'counties with', assignments.length, 'assignments');
 
-    L.geoJSON(countyGeo, {
-      style: f => {
-        const c = f.properties.NAME.trim().toLowerCase();
-        const s = f.properties.STATE.trim().toLowerCase();
-        const m = assignments.find(a =>
-          a.county.trim().toLowerCase().replace(' county','') === c &&
-          a.state.trim().toLowerCase() === s
-        );
-        return { color: m ? 'red' : 'green', weight:0.5, fillOpacity:0.4 };
+    var layer = L.geoJSON(countyGeo, {
+      style: function(feature) {
+        var name  = feature.properties.NAME.trim().toLowerCase();
+        var state = feature.properties.STATE.trim().toLowerCase();
+        var match = null;
+        for (var i = 0; i < assignments.length; i++) {
+          var a = assignments[i];
+          if (
+            a.county.trim().toLowerCase().replace(' county','') === name &&
+            a.state.trim().toLowerCase() === state
+          ) {
+            match = a;
+            break;
+          }
+        }
+        return {
+          color: match ? 'red' : 'green',
+          weight: 0.5,
+          fillOpacity: 0.4
+        };
       },
-      onEachFeature: (f, layer) => {
-        const c = f.properties.NAME.trim().toLowerCase();
-        const s = f.properties.STATE.trim().toLowerCase();
-        const m = assignments.find(a =>
-          a.county.trim().toLowerCase().replace(' county','') === c &&
-          a.state.trim().toLowerCase() === s
-        );
-        const title = m
-          ? `${m.county}, ${m.state} (Taken)`
-          : `${f.properties.NAME}, ${f.properties.STATE} (Open)`;
-        let popup = `<strong>${title}</strong>`;
-        if (m && m.link) popup += `<br><a href="${m.link}" target="_blank">Facebook Group</a>`;
-        if (m && m.owner) popup += `<br>Owner: ${m.owner}`;
+      onEachFeature: function(feature, layer) {
+        var name  = feature.properties.NAME.trim().toLowerCase();
+        var state = feature.properties.STATE.trim().toLowerCase();
+        var match = null;
+        for (var i = 0; i < assignments.length; i++) {
+          var a = assignments[i];
+          if (
+            a.county.trim().toLowerCase().replace(' county','') === name &&
+            a.state.trim().toLowerCase() === state
+          ) {
+            match = a;
+            break;
+          }
+        }
+        var title = match
+          ? (match.county + ', ' + match.state + ' (Taken)')
+          : (feature.properties.NAME + ', ' + feature.properties.STATE + ' (Open)');
+        var popup = '<strong>' + title + '</strong>';
+        if (match && match.link) {
+          popup += '<br><a href="' + match.link + '" target="_blank">Facebook Group</a>';
+        }
+        if (match && match.owner) {
+          popup += '<br>Owner: ' + match.owner;
+        }
         layer.bindPopup(popup);
       }
-    }).addTo(map);
+    });
+    layer.addTo(map);
   }
 
-  // ─── 5) Load county GeoJSON ─────────────────────────────────────────────────
-  console.log('⏳ Fetching county GeoJSON...');
+  // 5) Load counties GeoJSON
+  console.log('⏳ Fetching counties GeoJSON...');
   fetch('gz_2010_us_050_00_20m.json')
-    .then(res => {
-      if (!res.ok) throw new Error('GeoJSON load failed: ' + res.status);
+    .then(function(res) {
+      if (!res.ok) {
+        throw new Error('GeoJSON load failed: ' + res.status);
+      }
       return res.json();
     })
-    .then(data => {
+    .then(function(data) {
       console.log('✅ countyGeo loaded:', data.features.length, 'features');
       countyGeo = data;
       tryRenderMap();
     })
-    .catch(err => console.error('❌ County GeoJSON load error:', err));
+    .catch(function(err) {
+      console.error('❌ County GeoJSON error:', err);
+    });
 
-  // ─── 6) Listen for assignment data ────────────────────────────────────────
-  window.addEventListener('message', ev => {
-    console.log('✉️ postMessage received:', ev.data);
-    if (Array.isArray(ev.data)) {
-      console.log('✅ assignments loaded:', ev.data.length, 'rows');
-      assignments = ev.data;
+  // 6) Listen for assignments via postMessage
+  console.log('⏳ Waiting for assignments...');
+  window.addEventListener('message', function(e) {
+    console.log('✉️ message received:', e.data);
+    if (Array.isArray(e.data)) {
+      console.log('✅ assignments loaded:', e.data.length, 'rows');
+      assignments = e.data;
       tryRenderMap();
     }
   });
 
-  // ─── 7) Fire off iframe to fetch assignments ───────────────────────────────
-  console.log('⏳ Requesting assignments via iframe...');
-  const iframe = document.createElement('iframe');
+  // 7) Fire off iframe to fetch assignments
+  console.log('⏳ Injecting iframe for assignments...');
+  var iframe = document.createElement('iframe');
   iframe.style.display = 'none';
-  iframe.src = 'https://script.google.com/macros/s/AKfycbzB3_7QgYPyD8_9L2wBVswCTKthBYJkhfhB_cOJLaXB7byKzs2xStgHACt0g6wlLxc1JA/exec?func=getAssignments';
+  iframe.src =
+    'https://script.google.com/macros/s/AKfycbzB3_7QgYPyD8_9L2wBVswCTKthBYJkhfhB_cOJLaXB7byKzs2xStgHACt0g6wlLxc1JA/exec?func=getAssignments';
   document.body.appendChild(iframe);
 </script>
 
